@@ -22,6 +22,7 @@ saves it to a file. You can then replay those inputs by launching the applicatio
  * R - Start new game.
  * P - Pause and unpause game.
  * Escape - Quit.
+ 
  **NEW**
  * L - Playback current recording.
  * K - Pause playback and continue playing from current state.
