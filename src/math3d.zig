@@ -2,6 +2,8 @@ const std = @import("std");
 const assert = std.debug.assert;
 const c = @import("c.zig");
 
+pub const PI = 3.14159265358979;
+
 pub const Mat4x4 = struct {
     data: [4][4]f32,
 
