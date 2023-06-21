@@ -25,6 +25,28 @@ pub fn buildLib(b: *std.Build, target: std.zig.CrossTarget, optimize: std.builti
 
     const host = (std.zig.system.NativeTargetInfo.detect(target) catch unreachable).target;
     switch (host.os.tag) {
+        .windows => {
+            glfw_lib.linkSystemLibraryName("gdi32");
+            glfw_lib.linkSystemLibraryName("user32");
+            glfw_lib.linkSystemLibraryName("shell32");
+            glfw_lib.addCSourceFiles(&.{
+                glfw_src_dir ++ "monitor.c",
+                glfw_src_dir ++ "init.c",
+                glfw_src_dir ++ "vulkan.c",
+                glfw_src_dir ++ "input.c",
+                glfw_src_dir ++ "context.c",
+                glfw_src_dir ++ "window.c",
+                glfw_src_dir ++ "osmesa_context.c",
+                glfw_src_dir ++ "egl_context.c",
+                glfw_src_dir ++ "wgl_context.c",
+                glfw_src_dir ++ "win32_thread.c",
+                glfw_src_dir ++ "win32_init.c",
+                glfw_src_dir ++ "win32_monitor.c",
+                glfw_src_dir ++ "win32_time.c",
+                glfw_src_dir ++ "win32_joystick.c",
+                glfw_src_dir ++ "win32_window.c",
+            }, &.{"-D_GLFW_WIN32"});
+        },
         .macos => {
             glfw_lib.linkFramework("IOKit");
             glfw_lib.linkFramework("CoreFoundation");
