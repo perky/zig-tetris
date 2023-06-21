@@ -38,4 +38,8 @@ saves it to a file. You can then replay those inputs by launching the applicatio
 zig build run
 ```
 
+To playback a recording pass the file as an argument.
 
+```
+tetris.exe example_recording.tetris
+```
