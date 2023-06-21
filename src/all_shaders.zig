@@ -1,6 +1,7 @@
 const std = @import("std");
 const os = std.os;
 const c = @import("c.zig");
+const gl = @import("zopengl");
 const math3d = @import("math3d.zig");
 const debug_gl = @import("debug_gl.zig");
 const Vec4 = math3d.Vec4;
@@ -99,11 +100,11 @@ pub const ShaderProgram = struct {
     maybe_geometry_id: ?c.GLuint,
 
     pub fn bind(sp: ShaderProgram) void {
-        c.glUseProgram(sp.program_id);
+        gl.useProgram(sp.program_id);
     }
 
     pub fn attribLocation(sp: ShaderProgram, name: [*:0]const u8) c.GLint {
-        const id = c.glGetAttribLocation(sp.program_id, name);
+        const id = gl.getAttribLocation(sp.program_id, name);
         if (id == -1) {
             _ = c.printf("invalid attrib: %s\n", name);
             c.abort();
@@ -112,7 +113,7 @@ pub const ShaderProgram = struct {
     }
 
     pub fn uniformLocation(sp: ShaderProgram, name: [*:0]const u8) c.GLint {
-        const id = c.glGetUniformLocation(sp.program_id, name);
+        const id = gl.getUniformLocation(sp.program_id, name);
         if (id == -1) {
             _ = c.printf("invalid uniform: %s\n", name);
             c.abort();
@@ -122,27 +123,27 @@ pub const ShaderProgram = struct {
 
     pub fn setUniformInt(sp: ShaderProgram, uniform_id: c.GLint, value: c_int) void {
         _ = sp;
-        c.glUniform1i(uniform_id, value);
+        gl.uniform1i(uniform_id, value);
     }
 
     pub fn setUniformFloat(sp: ShaderProgram, uniform_id: c.GLint, value: f32) void {
         _ = sp;
-        c.glUniform1f(uniform_id, value);
+        gl.uniform1f(uniform_id, value);
     }
 
     pub fn setUniformVec3(sp: ShaderProgram, uniform_id: c.GLint, value: math3d.Vec3) void {
         _ = sp;
-        c.glUniform3fv(uniform_id, 1, &value.data[0]);
+        gl.uniform3fv(uniform_id, 1, &value.data[0]);
     }
 
     pub fn setUniformVec4(sp: ShaderProgram, uniform_id: c.GLint, value: Vec4) void {
         _ = sp;
-        c.glUniform4fv(uniform_id, 1, &value.data[0]);
+        gl.uniform4fv(uniform_id, 1, &value.data[0]);
     }
 
     pub fn setUniformMat4x4(sp: ShaderProgram, uniform_id: c.GLint, value: Mat4x4) void {
         _ = sp;
-        c.glUniformMatrix4fv(uniform_id, 1, c.GL_FALSE, &value.data[0][0]);
+        gl.uniformMatrix4fv(uniform_id, 1, gl.FALSE, &value.data[0][0]);
     }
 
     pub fn create(
@@ -151,66 +152,66 @@ pub const ShaderProgram = struct {
         maybe_geometry_source: ?[]u8,
     ) !ShaderProgram {
         var sp: ShaderProgram = undefined;
-        sp.vertex_id = try initGlShader(vertex_source, "vertex", c.GL_VERTEX_SHADER);
-        sp.fragment_id = try initGlShader(frag_source, "fragment", c.GL_FRAGMENT_SHADER);
+        sp.vertex_id = try initGlShader(vertex_source, "vertex", gl.VERTEX_SHADER);
+        sp.fragment_id = try initGlShader(frag_source, "fragment", gl.FRAGMENT_SHADER);
         sp.maybe_geometry_id = if (maybe_geometry_source) |geo_source|
-            try initGlShader(geo_source, "geometry", c.GL_GEOMETRY_SHADER)
+            try initGlShader(geo_source, "geometry", gl.GEOMETRY_SHADER)
         else
             null;
 
-        sp.program_id = c.glCreateProgram();
-        c.glAttachShader(sp.program_id, sp.vertex_id);
-        c.glAttachShader(sp.program_id, sp.fragment_id);
+        sp.program_id = gl.createProgram();
+        gl.attachShader(sp.program_id, sp.vertex_id);
+        gl.attachShader(sp.program_id, sp.fragment_id);
         if (sp.maybe_geometry_id) |geo_id| {
-            c.glAttachShader(sp.program_id, geo_id);
+            gl.attachShader(sp.program_id, geo_id);
         }
-        c.glLinkProgram(sp.program_id);
+        gl.linkProgram(sp.program_id);
 
         var ok: c.GLint = undefined;
-        c.glGetProgramiv(sp.program_id, c.GL_LINK_STATUS, &ok);
+        gl.getProgramiv(sp.program_id, gl.LINK_STATUS, &ok);
         if (ok != 0) return sp;
 
         var error_size: c.GLint = undefined;
-        c.glGetProgramiv(sp.program_id, c.GL_INFO_LOG_LENGTH, &error_size);
+        gl.getProgramiv(sp.program_id, gl.INFO_LOG_LENGTH, &error_size);
         const message = c.malloc(@intCast(c_ulong, error_size)) orelse return error.OutOfMemory;
-        c.glGetProgramInfoLog(sp.program_id, error_size, &error_size, @ptrCast([*:0]u8, message));
+        gl.getProgramInfoLog(sp.program_id, error_size, &error_size, @ptrCast([*:0]u8, message));
         _ = c.printf("Error linking shader program: %s\n", message);
         c.abort();
     }
 
     pub fn destroy(sp: *ShaderProgram) void {
         if (sp.maybe_geometry_id) |geo_id| {
-            c.glDetachShader(sp.program_id, geo_id);
+            gl.detachShader(sp.program_id, geo_id);
         }
-        c.glDetachShader(sp.program_id, sp.fragment_id);
-        c.glDetachShader(sp.program_id, sp.vertex_id);
+        gl.detachShader(sp.program_id, sp.fragment_id);
+        gl.detachShader(sp.program_id, sp.vertex_id);
 
         if (sp.maybe_geometry_id) |geo_id| {
-            c.glDeleteShader(geo_id);
+            gl.deleteShader(geo_id);
         }
-        c.glDeleteShader(sp.fragment_id);
-        c.glDeleteShader(sp.vertex_id);
+        gl.deleteShader(sp.fragment_id);
+        gl.deleteShader(sp.vertex_id);
 
-        c.glDeleteProgram(sp.program_id);
+        gl.deleteProgram(sp.program_id);
     }
 };
 
 fn initGlShader(source: []const u8, name: [*:0]const u8, kind: c.GLenum) !c.GLuint {
-    const shader_id = c.glCreateShader(kind);
+    const shader_id = gl.createShader(kind);
     const source_ptr: ?[*]const u8 = source.ptr;
     const source_len = @intCast(c.GLint, source.len);
-    c.glShaderSource(shader_id, 1, &source_ptr, &source_len);
-    c.glCompileShader(shader_id);
+    gl.shaderSource(shader_id, 1, &source_ptr, &source_len);
+    gl.compileShader(shader_id);
 
     var ok: c.GLint = undefined;
-    c.glGetShaderiv(shader_id, c.GL_COMPILE_STATUS, &ok);
+    gl.getShaderiv(shader_id, gl.COMPILE_STATUS, &ok);
     if (ok != 0) return shader_id;
 
     var error_size: c.GLint = undefined;
-    c.glGetShaderiv(shader_id, c.GL_INFO_LOG_LENGTH, &error_size);
+    gl.getShaderiv(shader_id, gl.INFO_LOG_LENGTH, &error_size);
 
     const message = c.malloc(@intCast(c_ulong, error_size)) orelse return error.OutOfMemory;
-    c.glGetShaderInfoLog(shader_id, error_size, &error_size, @ptrCast([*:0]u8, message));
+    gl.getShaderInfoLog(shader_id, error_size, &error_size, @ptrCast([*:0]u8, message));
     _ = c.printf("Error compiling %s shader:\n%s\n", name, message);
     c.abort();
 }

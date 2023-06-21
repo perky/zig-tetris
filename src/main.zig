@@ -8,12 +8,15 @@ const InputState = @import("tetris.zig").InputState;
 const InputRecordMode = @import("tetris.zig").InputRecordMode;
 const tetris_render = @import("tetris_render.zig");
 
+const gl = @import("zopengl");
 const std = @import("std");
 const assert = std.debug.assert;
 const bufPrint = std.fmt.bufPrint;
 const c = @import("c.zig");
-const debug_gl = @import("debug_gl.zig");
 const ArrayList = std.ArrayList;
+
+const GL_VERSION_MAJOR = 3;
+const GL_VERSION_MINOR = 3;
 
 var g_input_state = InputState{};
 var g_input_mutex = std.Thread.Mutex{};
@@ -41,7 +44,7 @@ fn keyCallback(
         const is_down: bool = (action == c.GLFW_PRESS);
         switch (key) {
             c.GLFW_KEY_ESCAPE => {
-                c.glfwSetWindowShouldClose(window, c.GL_TRUE);
+                c.glfwSetWindowShouldClose(window, gl.TRUE);
                 @atomicStore(bool, &g_sim_run, false, .Release);
             },
             c.GLFW_KEY_L => @atomicStore(InputRecordMode, &g_sim_desired_mode, .playback, .Release),
@@ -79,20 +82,23 @@ pub fn main() !void {
     try eventAndRenderMain(&tetris_state);
 }
 
+fn getOpenglProcAddress(name: [:0]const u8) ?*const anyopaque {
+    return c.glfwGetProcAddress(name);
+}
+
 fn eventAndRenderMain(tetris: *Tetris) !void {
     _ = c.glfwSetErrorCallback(errorCallback);
 
-    if (c.glfwInit() == c.GL_FALSE) @panic("GLFW init failure");
+    if (c.glfwInit() == gl.FALSE) @panic("GLFW init failure");
     defer c.glfwTerminate();
 
-    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 3);
-    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 2);
-    c.glfwWindowHint(c.GLFW_OPENGL_FORWARD_COMPAT, c.GL_TRUE);
-    c.glfwWindowHint(c.GLFW_OPENGL_DEBUG_CONTEXT, debug_gl.is_on);
+    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, GL_VERSION_MAJOR);
+    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, GL_VERSION_MINOR);
+    c.glfwWindowHint(c.GLFW_OPENGL_FORWARD_COMPAT, gl.TRUE);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
     c.glfwWindowHint(c.GLFW_DEPTH_BITS, 0);
     c.glfwWindowHint(c.GLFW_STENCIL_BITS, 8);
-    c.glfwWindowHint(c.GLFW_RESIZABLE, c.GL_FALSE);
+    c.glfwWindowHint(c.GLFW_RESIZABLE, gl.FALSE);
 
     var monitor: ?*c.GLFWmonitor = c.glfwGetPrimaryMonitor();
     var dpi_x: f32 = 1;
@@ -104,27 +110,23 @@ fn eventAndRenderMain(tetris: *Tetris) !void {
         @panic("unable to create window");
     defer c.glfwDestroyWindow(window);
     _ = c.glfwSetKeyCallback(window, keyCallback);
-    debug_gl.assertNoError();
 
-    c.glfwMakeContextCurrent(window);
     var framebuffer_width: c_int = undefined;
     var framebuffer_height: c_int = undefined;
     c.glfwGetFramebufferSize(window, &framebuffer_width, &framebuffer_height);
     assert(framebuffer_width >= desired_w_w);
     assert(framebuffer_height >= desired_w_h);
 
-    tetris_render.init(framebuffer_width, framebuffer_height);
-    defer tetris_render.deinit();
-    tetris_render.resetProjection();
+    
     tetris.setStageSize(
         @intToFloat(f32, framebuffer_width), 
         @intToFloat(f32, framebuffer_height)
     );
 
-    var render_thread = try std.Thread.spawn(.{}, renderLoop, .{window, tetris});
+    var render_thread = try std.Thread.spawn(.{}, renderLoop, .{window, tetris, framebuffer_width, framebuffer_height});
     var sim_thread = try std.Thread.spawn(.{}, simulationLoop, .{tetris});
     // Event loop.
-    while (c.glfwWindowShouldClose(window) == c.GL_FALSE) {
+    while (c.glfwWindowShouldClose(window) == gl.FALSE) {
         { // Attach a new random seed to input, so the simulation can choose to restart with a new seed.
             g_input_mutex.lock();
             defer g_input_mutex.unlock();
@@ -132,7 +134,8 @@ fn eventAndRenderMain(tetris: *Tetris) !void {
         }
         c.glfwPollEvents();
     }
-    _ = sim_thread;
+    @atomicStore(bool, &g_sim_run, false, .Release);
+    sim_thread.join();
     render_thread.join();
 }
 
@@ -268,16 +271,21 @@ fn simulationLoop(tetris: *Tetris) !void {
     }
 }
 
-pub fn renderLoop(window: *c.GLFWwindow, tetris: *Tetris) !void {
+pub fn renderLoop(window: *c.GLFWwindow, tetris: *Tetris, framebuffer_width: c_int, framebuffer_height: c_int) !void {
     c.glfwMakeContextCurrent(window);
-
     c.glfwSwapInterval(1);
-    c.glClearColor(0.0, 0.0, 0.0, 1.0);
-    c.glEnable(c.GL_BLEND);
-    c.glBlendFunc(c.GL_SRC_ALPHA, c.GL_ONE_MINUS_SRC_ALPHA);
-    c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
+    try gl.loadCoreProfile(getOpenglProcAddress, GL_VERSION_MAJOR, GL_VERSION_MINOR);
 
-    c.glViewport(0, 0, tetris_render.framebuffer_width, tetris_render.framebuffer_height);
+    tetris_render.init(framebuffer_width, framebuffer_height);
+    defer tetris_render.deinit();
+    tetris_render.resetProjection();
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+    gl.viewport(0, 0, tetris_render.framebuffer_width, tetris_render.framebuffer_height);
     c.glfwSetWindowUserPointer(window, @ptrCast(*anyopaque, tetris));
 
     var tetris_state_copy: Tetris = undefined;
@@ -285,11 +293,11 @@ pub fn renderLoop(window: *c.GLFWwindow, tetris: *Tetris) !void {
 
     const start_time = c.glfwGetTime();
     var prev_time = start_time;
-    while (c.glfwWindowShouldClose(window) == c.GL_FALSE) {
+    while (c.glfwWindowShouldClose(window) == gl.FALSE) {
         const now_time = c.glfwGetTime();
         prev_time = now_time;
 
-        c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT | c.GL_STENCIL_BUFFER_BIT);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
         
         if (tetris.mutex.tryLock()) {
             defer tetris.mutex.unlock();
@@ -301,7 +309,5 @@ pub fn renderLoop(window: *c.GLFWwindow, tetris: *Tetris) !void {
         }
         c.glfwSwapBuffers(window);
     }
-
-    debug_gl.assertNoError();
 }
 

@@ -30,18 +30,12 @@ saves it to a file. You can then replay those inputs by launching the applicatio
 
 ## Dependencies
 
- * [Zig compiler](https://github.com/andrewrk/zig) - use the debug build.
- * [libepoxy](https://github.com/anholt/libepoxy)
+ * [Zig compiler](https://ziglang.org) - use v0.11
 
 ## Building and Running
 
 ```
-zig build play
+zig build run
 ```
 
-## Building on windows using vcpkg
-
-* Install vcpkg https://github.com/microsoft/vcpkg
-* Install dependencies using `x64-windows` triplet
-* Use the flags `-Dwindows -Dvcpkg` when building the project
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const c = @import("c.zig");
+const gl = @import("zopengl");
 const AllShaders = @import("all_shaders.zig").AllShaders;
 const Mat4x4 = @import("math3d.zig").Mat4x4;
 const PngImage = @import("png.zig").PngImage;
@@ -16,18 +17,18 @@ pub const Spritesheet = struct {
         as.texture.setUniformMat4x4(as.texture_uniform_mvp, mvp);
         as.texture.setUniformInt(as.texture_uniform_tex, 0);
 
-        c.glBindBuffer(c.GL_ARRAY_BUFFER, s.vertex_buffer);
-        c.glEnableVertexAttribArray(@intCast(c.GLuint, as.texture_attrib_position));
-        c.glVertexAttribPointer(@intCast(c.GLuint, as.texture_attrib_position), 3, c.GL_FLOAT, c.GL_FALSE, 0, null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.vertex_buffer);
+        gl.enableVertexAttribArray(@intCast(c.GLuint, as.texture_attrib_position));
+        gl.vertexAttribPointer(@intCast(c.GLuint, as.texture_attrib_position), 3, gl.FLOAT, gl.FALSE, 0, null);
 
-        c.glBindBuffer(c.GL_ARRAY_BUFFER, s.tex_coord_buffers[index]);
-        c.glEnableVertexAttribArray(@intCast(c.GLuint, as.texture_attrib_tex_coord));
-        c.glVertexAttribPointer(@intCast(c.GLuint, as.texture_attrib_tex_coord), 2, c.GL_FLOAT, c.GL_FALSE, 0, null);
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.tex_coord_buffers[index]);
+        gl.enableVertexAttribArray(@intCast(c.GLuint, as.texture_attrib_tex_coord));
+        gl.vertexAttribPointer(@intCast(c.GLuint, as.texture_attrib_tex_coord), 2, gl.FLOAT, gl.FALSE, 0, null);
 
-        c.glActiveTexture(c.GL_TEXTURE0);
-        c.glBindTexture(c.GL_TEXTURE_2D, s.texture_id);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, s.texture_id);
 
-        c.glDrawArrays(c.GL_TRIANGLE_STRIP, 0, 4);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
     pub fn init(s: *Spritesheet, compressed_bytes: []const u8, w: usize, h: usize) !void {
@@ -36,29 +37,29 @@ pub const Spritesheet = struct {
         const row_count = s.img.height / h;
         s.count = col_count * row_count;
 
-        c.glGenTextures(1, &s.texture_id);
-        errdefer c.glDeleteTextures(1, &s.texture_id);
+        gl.genTextures(1, &s.texture_id);
+        errdefer gl.deleteTextures(1, &s.texture_id);
 
-        c.glBindTexture(c.GL_TEXTURE_2D, s.texture_id);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_NEAREST);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_NEAREST);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
-        c.glPixelStorei(c.GL_PACK_ALIGNMENT, 4);
-        c.glTexImage2D(
-            c.GL_TEXTURE_2D,
+        gl.bindTexture(gl.TEXTURE_2D, s.texture_id);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.pixelStorei(gl.PACK_ALIGNMENT, 4);
+        gl.texImage2D(
+            gl.TEXTURE_2D,
             0,
-            c.GL_RGBA,
+            gl.RGBA,
             @intCast(c_int, s.img.width),
             @intCast(c_int, s.img.height),
             0,
-            c.GL_RGBA,
-            c.GL_UNSIGNED_BYTE,
+            gl.RGBA,
+            gl.UNSIGNED_BYTE,
             @ptrCast(*anyopaque, &s.img.raw[0]),
         );
 
-        c.glGenBuffers(1, &s.vertex_buffer);
-        errdefer c.glDeleteBuffers(1, &s.vertex_buffer);
+        gl.genBuffers(1, &s.vertex_buffer);
+        errdefer gl.deleteBuffers(1, &s.vertex_buffer);
 
         const vertexes = [_][3]c.GLfloat{
             [_]c.GLfloat{ 0.0, 0.0, 0.0 },
@@ -67,15 +68,15 @@ pub const Spritesheet = struct {
             [_]c.GLfloat{ @intToFloat(c.GLfloat, w), @intToFloat(c.GLfloat, h), 0.0 },
         };
 
-        c.glBindBuffer(c.GL_ARRAY_BUFFER, s.vertex_buffer);
-        c.glBufferData(c.GL_ARRAY_BUFFER, 4 * 3 * @sizeOf(c.GLfloat), @ptrCast(*const anyopaque, &vertexes[0][0]), c.GL_STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.vertex_buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, 4 * 3 * @sizeOf(c.GLfloat), @ptrCast(*const anyopaque, &vertexes[0][0]), gl.STATIC_DRAW);
 
         s.tex_coord_buffers = try alloc(c.GLuint, s.count);
         //s.tex_coord_buffers = try c_allocator.alloc(c.GLuint, s.count);
         //errdefer c_allocator.free(s.tex_coord_buffers);
 
-        c.glGenBuffers(@intCast(c.GLint, s.tex_coord_buffers.len), s.tex_coord_buffers.ptr);
-        errdefer c.glDeleteBuffers(@intCast(c.GLint, s.tex_coord_buffers.len), &s.tex_coord_buffers[0]);
+        gl.genBuffers(@intCast(c.GLint, s.tex_coord_buffers.len), s.tex_coord_buffers.ptr);
+        errdefer gl.deleteBuffers(@intCast(c.GLint, s.tex_coord_buffers.len), &s.tex_coord_buffers[0]);
 
         for (s.tex_coord_buffers, 0..) |tex_coord_buffer, i| {
             const upside_down_row = i / col_count;
@@ -106,16 +107,16 @@ pub const Spritesheet = struct {
                 },
             };
 
-            c.glBindBuffer(c.GL_ARRAY_BUFFER, tex_coord_buffer);
-            c.glBufferData(c.GL_ARRAY_BUFFER, 4 * 2 * @sizeOf(c.GLfloat), @ptrCast(*const anyopaque, &tex_coords[0][0]), c.GL_STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, tex_coord_buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, 4 * 2 * @sizeOf(c.GLfloat), @ptrCast(*const anyopaque, &tex_coords[0][0]), gl.STATIC_DRAW);
         }
     }
 
     pub fn deinit(s: *Spritesheet) void {
-        c.glDeleteBuffers(@intCast(c.GLint, s.tex_coord_buffers.len), s.tex_coord_buffers.ptr);
+        gl.deleteBuffers(@intCast(c.GLint, s.tex_coord_buffers.len), s.tex_coord_buffers.ptr);
         //c_allocator.free(s.tex_coord_buffers);
-        c.glDeleteBuffers(1, &s.vertex_buffer);
-        c.glDeleteTextures(1, &s.texture_id);
+        gl.deleteBuffers(1, &s.vertex_buffer);
+        gl.deleteTextures(1, &s.texture_id);
 
         s.img.destroy();
     }
